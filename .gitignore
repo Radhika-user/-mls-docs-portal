@@ -7,3 +7,7 @@ __pycache__/
 env/
 venv/
 .streamlit/secrets.toml
+~$*
+.DS_Store
+Thumbs.db
+

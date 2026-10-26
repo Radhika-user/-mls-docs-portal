@@ -253,6 +253,24 @@ def scan_documents_folder(base_path: str):
 # ---------------------------------------------------------
 # Parsers (Cached)
 # ---------------------------------------------------------
+def extract_element_images(elem, doc):
+    """Safely extracts embedded screenshots/diagrams (DrawingML and VML) without crashing."""
+    imgs = []
+    try:
+        blips = elem.xpath('.//*[local-name()="blip"]/@*[local-name()="embed"]')
+        vmls = elem.xpath('.//*[local-name()="imagedata"]/@*[local-name()="id"]')
+        for rId in blips + vmls:
+            try:
+                if rId in doc.part.related_parts:
+                    part = doc.part.related_parts[rId]
+                    if hasattr(part, 'blob'):
+                        imgs.append(part.blob)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return imgs
+
 @st.cache_data(show_spinner=False)
 def parse_docx(file_path: str):
     if not DOCX_AVAILABLE:
@@ -270,7 +288,6 @@ def parse_docx(file_path: str):
                 text = p.text.strip()
                 style_name = p.style.name if p.style else 'Normal'
                 
-                blips = elem.xpath('.//a:blip/@r:embed')
                 if text:
                     content_items.append({
                         "type": "paragraph",
@@ -278,30 +295,51 @@ def parse_docx(file_path: str):
                         "style": style_name
                     })
                 
-                for rId in blips:
-                    try:
-                        if rId in doc.part.related_parts:
-                            rel_target = doc.part.related_parts[rId]
-                            if hasattr(rel_target, 'image'):
-                                img_bytes = rel_target.image.blob
-                                content_items.append({
-                                    "type": "image",
-                                    "data": img_bytes,
-                                    "format": rel_target.image.ext
-                                })
-                    except Exception:
-                        pass
+                for img_blob in extract_element_images(elem, doc):
+                    content_items.append({
+                        "type": "image",
+                        "data": img_blob,
+                        "format": "png"
+                    })
                         
             elif tag == 'tbl':
                 table = docx.table.Table(elem, doc)
                 table_data = []
                 for row in table.rows:
-                    row_cells = [cell.text.strip().replace('\n', ' ') for cell in row.cells]
+                    row_cells = []
+                    for cell in row.cells:
+                        for img_blob in extract_element_images(cell._tc, doc):
+                            content_items.append({
+                                "type": "image",
+                                "data": img_blob,
+                                "format": "png"
+                            })
+                        row_cells.append(cell.text.strip().replace('\n', ' '))
                     table_data.append(row_cells)
                 if table_data:
                     content_items.append({
                         "type": "table",
                         "data": table_data
+                    })
+            
+            elif tag == 'sdt':
+                for sub_p in elem.xpath('.//*[local-name()="p"]'):
+                    try:
+                        p = docx.text.paragraph.Paragraph(sub_p, doc)
+                        text = p.text.strip()
+                        if text:
+                            content_items.append({
+                                "type": "paragraph",
+                                "text": text,
+                                "style": p.style.name if p.style else 'Normal'
+                            })
+                    except Exception:
+                        pass
+                for img_blob in extract_element_images(elem, doc):
+                    content_items.append({
+                        "type": "image",
+                        "data": img_blob,
+                        "format": "png"
                     })
                     
         return {"items": content_items, "title": os.path.basename(file_path)}
@@ -729,26 +767,32 @@ else:
                         st.markdown(text)
                         
                 elif item_type == "image":
-                    st.image(item["data"], caption="Screenshot / Diagram", width="stretch")
+                    st.image(item["data"], caption="📸 Procedure Screenshot / Diagram", use_container_width=True)
                     
                 elif item_type == "table":
                     data = item.get("data", [])
                     if data:
-                        header = data[0]
-                        rows = data[1:] if len(data) > 1 else []
-                        
-                        clean_header = []
-                        for idx, h in enumerate(header):
-                            col_name = h.strip() if h.strip() else f"Col_{idx+1}"
-                            while col_name in clean_header:
-                                col_name = f"{col_name}_{idx+1}"
-                            clean_header.append(col_name)
+                        max_cols = max(len(r) for r in data)
+                        if max_cols > 0:
+                            padded_data = [r + [""] * (max_cols - len(r)) for r in data]
+                            header = padded_data[0]
+                            rows = padded_data[1:] if len(padded_data) > 1 else []
                             
-                        if rows:
-                            df_table = pd.DataFrame(rows, columns=clean_header)
-                            st.dataframe(df_table, width="stretch")
-                        else:
-                            st.write(header)
+                            clean_header = []
+                            for idx, h in enumerate(header):
+                                col_name = str(h).strip() if str(h).strip() else f"Col_{idx+1}"
+                                while col_name in clean_header:
+                                    col_name = f"{col_name}_{idx+1}"
+                                clean_header.append(col_name)
+                                
+                            try:
+                                if rows:
+                                    df_table = pd.DataFrame(rows, columns=clean_header)
+                                else:
+                                    df_table = pd.DataFrame([clean_header], columns=clean_header)
+                                st.dataframe(df_table, use_container_width=True, hide_index=True)
+                            except Exception:
+                                st.table(padded_data)
 
     # 2. Excel Rendering
     elif ext in [".xlsx", ".xls"]:
@@ -767,8 +811,17 @@ else:
                 with tabs[i]:
                     df_sheet = sheets[sheet_name]
                     c_rows, c_cols = df_sheet.shape
-                    st.caption(f"Rows: **{c_rows}** | Columns: **{c_cols}**")
-                    st.dataframe(df_sheet, width="stretch")
+                    
+                    c_info, c_view = st.columns([2, 1])
+                    with c_info:
+                        st.caption(f"Rows: **{c_rows}** | Columns: **{c_cols}**")
+                    with c_view:
+                        view_full = st.checkbox("Expand Full Table", key=f"chk_full_{active_doc['name']}_{sheet_name}")
+                    
+                    if view_full:
+                        st.dataframe(df_sheet, use_container_width=True, height=min(800, max(250, c_rows * 36)))
+                    else:
+                        st.dataframe(df_sheet, use_container_width=True)
 
     # 3. PowerPoint Rendering
     elif ext == ".pptx":
