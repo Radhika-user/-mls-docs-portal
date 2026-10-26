@@ -31,41 +31,16 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------------------------------------------------------
-# State Initialization & Authentication Check
-# ---------------------------------------------------------
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-    st.session_state["auth_user"] = None
-
-is_authenticated = st.session_state["authenticated"]
-
 # Styling configuration
-BG_FILE = os.path.join(os.path.dirname(__file__), "assets", "background.jpg")
-if not is_authenticated and os.path.exists(BG_FILE):
-    try:
-        with open(BG_FILE, "rb") as f_bg:
-            encoded_bg = base64.b64encode(f_bg.read()).decode()
-        app_bg_css = f"""
-        [data-testid="stAppViewContainer"] {{
-            background: linear-gradient(rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.35)), url("data:image/jpeg;base64,{encoded_bg}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }}
-        """
-    except Exception:
-        app_bg_css = "[data-testid='stAppViewContainer'] { background-color: #F8FAFC !important; }"
-else:
-    app_bg_css = """
-    [data-testid="stAppViewContainer"] {
-        background-color: #F1F5F9 !important;
-    }
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF !important;
-        border-right: 1.5px solid #CBD5E1 !important;
-    }
-    """
+app_bg_css = """
+[data-testid="stAppViewContainer"] {
+    background-color: #F1F5F9 !important;
+}
+[data-testid="stSidebar"] {
+    background-color: #FFFFFF !important;
+    border-right: 1.5px solid #CBD5E1 !important;
+}
+"""
 
 st.markdown(f"""
 <style>
@@ -389,91 +364,10 @@ def parse_pptx(file_path: str):
         return {"error": str(e)}
 
 # ---------------------------------------------------------
-# Windows & Cloud Authentication
+# Environment & Paths
 # ---------------------------------------------------------
-try:
-    import win32security
-    WIN32_AUTH_AVAILABLE = True
-except ImportError:
-    WIN32_AUTH_AVAILABLE = False
-
-DEFAULT_DOMAIN = "OCNHOU"
 SAMPLE_DOCS_DIR = os.path.join(os.path.dirname(__file__), "sample_docs")
 IS_CLOUD_MODE = not os.path.exists(DEFAULT_DOCS_ROOT)
-
-def authenticate_windows_user(username: str, password: str, domain: str = DEFAULT_DOMAIN) -> tuple[bool, str]:
-    if not username or not password:
-        return False, "Please enter both Windows username and password."
-    if not WIN32_AUTH_AVAILABLE:
-        # Fallback when running on Linux / Streamlit Cloud
-        return True, "Cloud Demo Authentication"
-    try:
-        token = win32security.LogonUser(
-            username.strip(),
-            domain.strip(),
-            password,
-            win32security.LOGON32_LOGON_NETWORK,
-            win32security.LOGON32_PROVIDER_DEFAULT
-        )
-        token.Close()
-        return True, "Success"
-    except Exception as e:
-        err_msg = str(e)
-        if "1326" in err_msg:
-            return False, "Incorrect Windows username or password."
-        elif "1330" in err_msg:
-            return False, "Your Windows password has expired."
-        elif "1909" in err_msg:
-            return False, "Your Windows account is locked out."
-        return False, f"Authentication error: {err_msg}"
-
-# If not authenticated, render login form and stop execution
-if not st.session_state["authenticated"]:
-    st.write("")
-    st.write("")
-    col_l1, col_l2, col_l3 = st.columns([1, 1.3, 1])
-    with col_l2:
-        with st.form("windows_login_form"):
-            st.markdown("<div style='text-align:center; margin-bottom: 20px;'>", unsafe_allow_html=True)
-            st.markdown("<h2 style='color:#1E3A8A; margin:0;'>🔐 MLS Procedures Portal</h2>", unsafe_allow_html=True)
-            if IS_CLOUD_MODE:
-                st.markdown("<p style='color:#64748B; font-size:0.92rem; margin-top:5px;'>🌐 Cloud Live Preview Mode</p>", unsafe_allow_html=True)
-            else:
-                st.markdown("<p style='color:#64748B; font-size:0.92rem; margin-top:5px;'>Sign in with your corporate Windows account</p>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-            login_user = st.text_input("👤 Username:", placeholder="e.g. karthik.padmanathan or Guest", key="inp_user")
-            login_pass = st.text_input("🔑 Password:", type="password", placeholder="Enter your password (or leave blank for guest)", key="inp_pass")
-            
-            if not IS_CLOUD_MODE and WIN32_AUTH_AVAILABLE:
-                st.caption("🏢 **Domain:** `OCNHOU` (Windows Active Directory)")
-            else:
-                st.caption("☁️ **Running in Cloud Mode:** Enter any username or click below to enter as Guest.")
-            
-            st.write("")
-            btn_submit = st.form_submit_button("Sign In / Enter Portal", width="stretch", type="primary")
-            
-            if btn_submit:
-                if IS_CLOUD_MODE or not WIN32_AUTH_AVAILABLE:
-                    user_label = login_user.strip() if login_user.strip() else "Guest Visitor"
-                    st.session_state["authenticated"] = True
-                    st.session_state["auth_user"] = user_label
-                    st.rerun()
-                else:
-                    with st.spinner("Authenticating with OCNHOU Domain..."):
-                        ok, msg = authenticate_windows_user(login_user, login_pass, DEFAULT_DOMAIN)
-                    if ok:
-                        st.session_state["authenticated"] = True
-                        st.session_state["auth_user"] = f"{DEFAULT_DOMAIN}\\{login_user.strip()}"
-                        st.rerun()
-                    else:
-                        st.error(msg)
-                    
-        if not IS_CLOUD_MODE and WIN32_AUTH_AVAILABLE:
-            st.markdown("<div style='text-align:center; color:#64748B; font-size:0.8rem; margin-top:12px;'>🔒 Access authenticated against the OCNHOU Domain Controller</div>", unsafe_allow_html=True)
-        else:
-            st.markdown("<div style='text-align:center; color:#64748B; font-size:0.8rem; margin-top:12px;'>🌐 Cloud Demonstration Version</div>", unsafe_allow_html=True)
-    st.stop()
 
 # ---------------------------------------------------------
 # State Management
@@ -496,21 +390,6 @@ def reset_filters_callback():
 # Sidebar Controls & Filters
 # ---------------------------------------------------------
 st.sidebar.markdown("## 📚 Documentation Portal")
-
-# Signed-in user info & Sign out
-if st.session_state.get("auth_user"):
-    st.sidebar.markdown(f"""
-    <div style='background:#F1F5F9; border:1px solid #E2E8F0; border-radius:8px; padding:8px 12px; margin-bottom:8px;'>
-        <div style='font-size:0.72rem; color:#64748B; font-weight:600;'>AUTHENTICATED USER</div>
-        <div style='font-size:0.85rem; font-weight:600; color:#1E3A8A; word-break:break-all;'>{st.session_state['auth_user']}</div>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.sidebar.button("🚪 Sign Out", key="sign_out_btn", width="stretch"):
-        st.session_state["authenticated"] = False
-        st.session_state["auth_user"] = None
-        st.session_state["selected_file_path"] = None
-        st.rerun()
-    st.sidebar.markdown("---")
 
 # Navigation home button
 if st.sidebar.button("🏠 Home / All Categories", width="stretch", type="primary" if st.session_state["selected_file_path"] is None else "secondary"):
