@@ -351,7 +351,7 @@ def parse_pptx(file_path: str):
         return {"error": str(e)}
 
 # ---------------------------------------------------------
-# Windows Authentication
+# Windows & Cloud Authentication
 # ---------------------------------------------------------
 try:
     import win32security
@@ -360,12 +360,15 @@ except ImportError:
     WIN32_AUTH_AVAILABLE = False
 
 DEFAULT_DOMAIN = "OCNHOU"
+SAMPLE_DOCS_DIR = os.path.join(os.path.dirname(__file__), "sample_docs")
+IS_CLOUD_MODE = not os.path.exists(DEFAULT_DOCS_ROOT)
 
 def authenticate_windows_user(username: str, password: str, domain: str = DEFAULT_DOMAIN) -> tuple[bool, str]:
     if not username or not password:
         return False, "Please enter both Windows username and password."
     if not WIN32_AUTH_AVAILABLE:
-        return False, "win32security library is not installed on the server."
+        # Fallback when running on Linux / Streamlit Cloud
+        return True, "Cloud Demo Authentication"
     try:
         token = win32security.LogonUser(
             username.strip(),
@@ -395,27 +398,43 @@ if not st.session_state["authenticated"]:
         with st.form("windows_login_form"):
             st.markdown("<div style='text-align:center; margin-bottom: 20px;'>", unsafe_allow_html=True)
             st.markdown("<h2 style='color:#1E3A8A; margin:0;'>🔐 MLS Procedures Portal</h2>", unsafe_allow_html=True)
-            st.markdown("<p style='color:#64748B; font-size:0.92rem; margin-top:5px;'>Sign in with your corporate Windows account</p>", unsafe_allow_html=True)
+            if IS_CLOUD_MODE:
+                st.markdown("<p style='color:#64748B; font-size:0.92rem; margin-top:5px;'>🌐 Cloud Live Preview Mode</p>", unsafe_allow_html=True)
+            else:
+                st.markdown("<p style='color:#64748B; font-size:0.92rem; margin-top:5px;'>Sign in with your corporate Windows account</p>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
             
-            login_user = st.text_input("👤 Windows Username:", placeholder="e.g. karthik.padmanathan", key="inp_user")
-            login_pass = st.text_input("🔑 Windows Password:", type="password", placeholder="Enter your Windows password", key="inp_pass")
+            login_user = st.text_input("👤 Username:", placeholder="e.g. karthik.padmanathan or Guest", key="inp_user")
+            login_pass = st.text_input("🔑 Password:", type="password", placeholder="Enter your password (or leave blank for guest)", key="inp_pass")
             
-            st.caption("🏢 **Domain:** `OCNHOU` (Windows Active Directory)")
+            if not IS_CLOUD_MODE and WIN32_AUTH_AVAILABLE:
+                st.caption("🏢 **Domain:** `OCNHOU` (Windows Active Directory)")
+            else:
+                st.caption("☁️ **Running in Cloud Mode:** Enter any username or click below to enter as Guest.")
+            
             st.write("")
-            btn_submit = st.form_submit_button("Sign In with Windows", width="stretch", type="primary")
+            btn_submit = st.form_submit_button("Sign In / Enter Portal", width="stretch", type="primary")
             
             if btn_submit:
-                with st.spinner("Authenticating with OCNHOU Domain..."):
-                    ok, msg = authenticate_windows_user(login_user, login_pass, DEFAULT_DOMAIN)
-                if ok:
+                if IS_CLOUD_MODE or not WIN32_AUTH_AVAILABLE:
+                    user_label = login_user.strip() if login_user.strip() else "Guest Visitor"
                     st.session_state["authenticated"] = True
-                    st.session_state["auth_user"] = f"{DEFAULT_DOMAIN}\\{login_user.strip()}"
+                    st.session_state["auth_user"] = user_label
                     st.rerun()
                 else:
-                    st.error(msg)
+                    with st.spinner("Authenticating with OCNHOU Domain..."):
+                        ok, msg = authenticate_windows_user(login_user, login_pass, DEFAULT_DOMAIN)
+                    if ok:
+                        st.session_state["authenticated"] = True
+                        st.session_state["auth_user"] = f"{DEFAULT_DOMAIN}\\{login_user.strip()}"
+                        st.rerun()
+                    else:
+                        st.error(msg)
                     
-        st.markdown("<div style='text-align:center; color:#64748B; font-size:0.8rem; margin-top:12px;'>🔒 Access authenticated against the OCNHOU Domain Controller</div>", unsafe_allow_html=True)
+        if not IS_CLOUD_MODE and WIN32_AUTH_AVAILABLE:
+            st.markdown("<div style='text-align:center; color:#64748B; font-size:0.8rem; margin-top:12px;'>🔒 Access authenticated against the OCNHOU Domain Controller</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='text-align:center; color:#64748B; font-size:0.8rem; margin-top:12px;'>🌐 Cloud Demonstration Version</div>", unsafe_allow_html=True)
     st.stop()
 
 # ---------------------------------------------------------
@@ -467,10 +486,18 @@ st.sidebar.markdown("### 🔍 Filter Documents")
 search_term = st.sidebar.text_input("Search keywords:", placeholder="e.g. Austin, QC, Invoice...", key="filter_search")
 
 # Folder scanning
-docs_root = DEFAULT_DOCS_ROOT
+if os.path.exists(DEFAULT_DOCS_ROOT):
+    docs_root = DEFAULT_DOCS_ROOT
+    is_cloud_mode = False
+else:
+    docs_root = SAMPLE_DOCS_DIR
+    is_cloud_mode = True
+
 if not os.path.exists(docs_root):
-    st.sidebar.error("Cannot connect to file server network path.")
-    st.stop()
+    os.makedirs(docs_root, exist_ok=True)
+
+if is_cloud_mode:
+    st.sidebar.caption("☁️ *Browsing cloud sample archives*")
 
 all_files = scan_documents_folder(docs_root)
 if not all_files:
@@ -537,7 +564,8 @@ if active_doc is None:
     # -----------------------------------------------------
     # OVERVIEW / DASHBOARD (NOW FULLY REACTIVE TO FILTERS!)
     # -----------------------------------------------------
-    st.markdown("""
+    share_badge_text = "📁 Active Share: Procedures" if not is_cloud_mode else "☁️ Cloud Mode: Procedures Archive"
+    st.markdown(f"""
     <div class='portal-hero'>
         <div style='display:flex; justify-content:space-between; align-items:center;'>
             <div>
@@ -546,7 +574,7 @@ if active_doc is None:
             </div>
             <div style='text-align:right;'>
                 <span style='background:rgba(255,255,255,0.2); padding:6px 14px; border-radius:20px; font-size:0.85rem; color:#FFFFFF;'>
-                    📁 Active Share: Procedures
+                    {share_badge_text}
                 </span>
             </div>
         </div>
@@ -641,23 +669,33 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-    col_save, col_exp = st.columns([1, 1])
-    with col_save:
-        if st.button("💾 Save directly to my Downloads Folder", width="stretch", key="copy_to_downloads_btn"):
+    if os.name == 'nt' and not is_cloud_mode:
+        col_save, col_exp = st.columns([1, 1])
+        with col_save:
+            if st.button("💾 Save directly to my Downloads Folder", width="stretch", key="copy_to_downloads_btn"):
+                try:
+                    user_dl = os.path.join(os.path.expanduser("~"), "Downloads")
+                    dest_file = os.path.join(user_dl, active_doc["name"])
+                    shutil.copy2(active_doc["full_path"], dest_file)
+                    st.success(f"✅ Successfully saved to: {dest_file}")
+                except Exception as e:
+                    st.error(f"Could not save file: {e}")
+        with col_exp:
+            if st.button("📂 Locate in Windows File Explorer", width="stretch", key="open_explorer_btn"):
+                try:
+                    os.system(f'explorer.exe /select,"{active_doc["full_path"]}"')
+                    st.toast("Opening file in File Explorer...")
+                except Exception as e:
+                    st.error(f"Could not open explorer: {e}")
+    else:
+        if st.button("💾 Save to my Downloads Folder", width="stretch", key="copy_to_downloads_btn"):
             try:
                 user_dl = os.path.join(os.path.expanduser("~"), "Downloads")
                 dest_file = os.path.join(user_dl, active_doc["name"])
                 shutil.copy2(active_doc["full_path"], dest_file)
                 st.success(f"✅ Successfully saved to: {dest_file}")
             except Exception as e:
-                st.error(f"Could not save file: {e}")
-    with col_exp:
-        if st.button("📂 Locate in Windows File Explorer", width="stretch", key="open_explorer_btn"):
-            try:
-                os.system(f'explorer.exe /select,"{active_doc["full_path"]}"')
-                st.toast("Opening file in File Explorer...")
-            except Exception as e:
-                st.error(f"Could not open explorer: {e}")
+                st.info("Tip: Use the '⬇️ Download File' button above to save this document to your device.")
 
     ext = active_doc["ext"]
 
