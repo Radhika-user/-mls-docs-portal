@@ -175,7 +175,7 @@ MIME_TYPES = {
 def get_mime_type(ext: str) -> str:
     return MIME_TYPES.get(ext.lower(), "application/octet-stream")
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=30)
 def scan_documents_folder(base_path: str):
     if not os.path.exists(base_path):
         return []
@@ -468,6 +468,30 @@ if st.sidebar.button("🔄 Check for New Files", width="stretch", key="refresh_f
     parse_pptx.clear()
     st.toast("Folder refreshed with latest files!", icon="✅")
     st.rerun()
+
+# ---------------------------------------------------------
+# In-App Document Uploader
+# ---------------------------------------------------------
+with st.sidebar.expander("📤 Upload New Document", expanded=False):
+    uploaded_file = st.file_uploader(
+        "Select document to add:",
+        type=["docx", "xlsx", "xls", "pptx", "pdf", "txt"],
+        key="sidebar_doc_uploader"
+    )
+    existing_cats = sorted(list({f["category"] for f in all_files}))
+    upload_cat = st.selectbox("Category:", ["General Procedures"] + existing_cats, key="upload_cat_sel")
+    
+    if uploaded_file is not None:
+        if st.button("💾 Save to Portal", type="primary", key="save_uploaded_doc_btn", width="stretch"):
+            target_cat_dir = os.path.join(docs_root, upload_cat)
+            os.makedirs(target_cat_dir, exist_ok=True)
+            saved_dest = os.path.join(target_cat_dir, uploaded_file.name)
+            with open(saved_dest, "wb") as f_save:
+                f_save.write(uploaded_file.getbuffer())
+            scan_documents_folder.clear()
+            st.success(f"✅ Added {uploaded_file.name}!")
+            time.sleep(1)
+            st.rerun()
 
 st.sidebar.markdown("---")
 
