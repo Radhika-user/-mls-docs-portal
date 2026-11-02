@@ -176,9 +176,13 @@ st.markdown(f"""
     }
 
     iframe[title="st.iframe"] {
-        display: none !important;
-        height: 0 !important;
-        width: 0 !important;
+        position: fixed !important;
+        bottom: -9999px !important;
+        left: -9999px !important;
+        width: 1px !important;
+        height: 1px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -191,30 +195,23 @@ components.html(
     <script>
     (function() {
         function removeCreatorBadge() {
-            try {
-                let win = window;
-                while (win.parent && win.parent !== win) {
-                    try {
-                        if (win.parent.document) { win = win.parent; } else { break; }
-                    } catch(e) { break; }
-                }
+            const targets = [];
+            try { if (window.top && window.top.document) targets.push(window.top.document); } catch(e) {}
+            try { if (window.parent && window.parent.document && !targets.includes(window.parent.document)) targets.push(window.parent.document); } catch(e) {}
+            try { if (window.document && !targets.includes(window.document)) targets.push(window.document); } catch(e) {}
 
-                const docs = [document];
-                if (win && win.document && win !== window) docs.push(win.document);
-                if (window.parent && window.parent.document && window.parent !== window && !docs.includes(window.parent.document)) {
-                    docs.push(window.parent.document);
-                }
-
-                docs.forEach(doc => {
-                    const targets = doc.querySelectorAll('[data-testid="appCreatorAvatar"], [class*="_profileContainer_"], [class*="_profilePreview_"], a[href*="radhika-user"], a[href*="share.streamlit.io/user"]');
-                    targets.forEach(el => {
+            targets.forEach(doc => {
+                // 1. Remove elements directly from DOM
+                try {
+                    const els = doc.querySelectorAll('[data-testid="appCreatorAvatar"], [class*="_profileContainer_"], [class*="_profilePreview_"], a[href*="radhika-user"], a[href*="share.streamlit.io/user"], p[class*="_createdByLabel_"]');
+                    els.forEach(el => {
                         const container = el.closest('[class*="_profileContainer_"]') || el;
-                        container.style.setProperty('display', 'none', 'important');
-                        container.style.setProperty('visibility', 'hidden', 'important');
-                        container.style.setProperty('opacity', '0', 'important');
-                        container.style.setProperty('pointer-events', 'none', 'important');
+                        container.remove();
                     });
+                } catch(e) {}
 
+                // 2. Inject persistent stylesheet
+                try {
                     if (!doc.getElementById('hide-creator-badge-style')) {
                         const style = doc.createElement('style');
                         style.id = 'hide-creator-badge-style';
@@ -223,7 +220,8 @@ components.html(
                             div[class*="_profileContainer_"],
                             div[class*="_profilePreview_"],
                             a[href*="radhika-user"],
-                            a[href*="share.streamlit.io/user"] {
+                            a[href*="share.streamlit.io/user"],
+                            p[class*="_createdByLabel_"] {
                                 display: none !important;
                                 visibility: hidden !important;
                                 opacity: 0 !important;
@@ -232,17 +230,16 @@ components.html(
                         `;
                         doc.head.appendChild(style);
                     }
-                });
-            } catch (err) {}
+                } catch(e) {}
+            });
         }
         removeCreatorBadge();
-        const timer = setInterval(removeCreatorBadge, 300);
-        setTimeout(() => clearInterval(timer), 12000);
+        const timer = setInterval(removeCreatorBadge, 200);
+        setTimeout(() => clearInterval(timer), 20000);
     })();
     </script>
     """,
-    height=0,
-    width=0,
+    height=1,
 )
 
 # ---------------------------------------------------------
