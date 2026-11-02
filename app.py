@@ -158,24 +158,24 @@ st.markdown(f"""
     .badge-pptx {{ background-color: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }}
 
     /* Streamlit Cloud Clean Interface: Hide MainMenu, Deploy/Status toolbar & Creator Avatar */
-    #MainMenu { visibility: hidden !important; display: none !important; }
-    footer { visibility: hidden !important; display: none !important; }
-    header [data-testid="stToolbar"] { visibility: hidden !important; display: none !important; }
-    .stAppDeployButton { visibility: hidden !important; display: none !important; }
-    [data-testid="stStatusWidget"] { visibility: hidden !important; display: none !important; }
+    #MainMenu {{ visibility: hidden !important; display: none !important; }}
+    footer {{ visibility: hidden !important; display: none !important; }}
+    header [data-testid="stToolbar"] {{ visibility: hidden !important; display: none !important; }}
+    .stAppDeployButton {{ visibility: hidden !important; display: none !important; }}
+    [data-testid="stStatusWidget"] {{ visibility: hidden !important; display: none !important; }}
 
     [data-testid="appCreatorAvatar"],
     div[class*="_profileContainer_"],
     div[class*="_profilePreview_"],
     a[href*="radhika-user"],
-    a[href*="share.streamlit.io/user"] {
+    a[href*="share.streamlit.io/user"] {{
         display: none !important;
         visibility: hidden !important;
         opacity: 0 !important;
         pointer-events: none !important;
-    }
+    }}
 
-    iframe[title="st.iframe"] {
+    iframe[title="st.iframe"] {{
         position: fixed !important;
         bottom: -9999px !important;
         left: -9999px !important;
@@ -183,7 +183,7 @@ st.markdown(f"""
         height: 1px !important;
         opacity: 0 !important;
         pointer-events: none !important;
-    }
+    }}
 </style>
 """, unsafe_allow_html=True)
 
