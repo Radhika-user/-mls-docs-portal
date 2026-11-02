@@ -6,6 +6,7 @@ import base64
 from datetime import datetime
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Optional parsers
 try:
@@ -155,8 +156,94 @@ st.markdown(f"""
     .badge-xlsx {{ background-color: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }}
     .badge-xls  {{ background-color: #FEFCE8; color: #A16207; border: 1px solid #FEF08A; }}
     .badge-pptx {{ background-color: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }}
+
+    /* Streamlit Cloud Clean Interface: Hide MainMenu, Deploy/Status toolbar & Creator Avatar */
+    #MainMenu { visibility: hidden !important; display: none !important; }
+    footer { visibility: hidden !important; display: none !important; }
+    header [data-testid="stToolbar"] { visibility: hidden !important; display: none !important; }
+    .stAppDeployButton { visibility: hidden !important; display: none !important; }
+    [data-testid="stStatusWidget"] { visibility: hidden !important; display: none !important; }
+
+    [data-testid="appCreatorAvatar"],
+    div[class*="_profileContainer_"],
+    div[class*="_profilePreview_"],
+    a[href*="radhika-user"],
+    a[href*="share.streamlit.io/user"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+
+    iframe[title="st.iframe"] {
+        display: none !important;
+        height: 0 !important;
+        width: 0 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# Purge Streamlit Cloud Creator Badge & GitHub Icon
+# ---------------------------------------------------------
+components.html(
+    """
+    <script>
+    (function() {
+        function removeCreatorBadge() {
+            try {
+                let win = window;
+                while (win.parent && win.parent !== win) {
+                    try {
+                        if (win.parent.document) { win = win.parent; } else { break; }
+                    } catch(e) { break; }
+                }
+
+                const docs = [document];
+                if (win && win.document && win !== window) docs.push(win.document);
+                if (window.parent && window.parent.document && window.parent !== window && !docs.includes(window.parent.document)) {
+                    docs.push(window.parent.document);
+                }
+
+                docs.forEach(doc => {
+                    const targets = doc.querySelectorAll('[data-testid="appCreatorAvatar"], [class*="_profileContainer_"], [class*="_profilePreview_"], a[href*="radhika-user"], a[href*="share.streamlit.io/user"]');
+                    targets.forEach(el => {
+                        const container = el.closest('[class*="_profileContainer_"]') || el;
+                        container.style.setProperty('display', 'none', 'important');
+                        container.style.setProperty('visibility', 'hidden', 'important');
+                        container.style.setProperty('opacity', '0', 'important');
+                        container.style.setProperty('pointer-events', 'none', 'important');
+                    });
+
+                    if (!doc.getElementById('hide-creator-badge-style')) {
+                        const style = doc.createElement('style');
+                        style.id = 'hide-creator-badge-style';
+                        style.innerHTML = `
+                            [data-testid="appCreatorAvatar"],
+                            div[class*="_profileContainer_"],
+                            div[class*="_profilePreview_"],
+                            a[href*="radhika-user"],
+                            a[href*="share.streamlit.io/user"] {
+                                display: none !important;
+                                visibility: hidden !important;
+                                opacity: 0 !important;
+                                pointer-events: none !important;
+                            }
+                        `;
+                        doc.head.appendChild(style);
+                    }
+                });
+            } catch (err) {}
+        }
+        removeCreatorBadge();
+        const timer = setInterval(removeCreatorBadge, 300);
+        setTimeout(() => clearInterval(timer), 12000);
+    })();
+    </script>
+    """,
+    height=0,
+    width=0,
+)
 
 # ---------------------------------------------------------
 # Constants & Scanning
